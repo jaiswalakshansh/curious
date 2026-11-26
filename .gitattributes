@@ -1,0 +1,3 @@
+# Vendored third-party source — exclude from language stats and collapse in diffs
+artex/refs/** linguist-vendored
+artex/refs/** linguist-generated=false

@@ -1,0 +1,25 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Node (in case a vendored web/ ever gets built locally)
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+
+# Go build artifacts (compiled binaries; the /artex project dir is NOT ignored)
+**/*.test
+/artex/refs/*/artex
+/artex/refs/*/cmd/artex/artex
+/artex/refs/*/artex-archive-check
+
+# Local data / secrets (never commit)
+**/data/
+**/keys/
+*.env
+.env
+!*.env.example
