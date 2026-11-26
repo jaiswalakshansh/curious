@@ -8,6 +8,13 @@ Legend: **U** = `original/` (upstream seed) · **B** = `BaaRai-ARTEX/` (mainline
 
 ---
 
+```mermaid
+flowchart TB
+  UP["Autumn-27/ARTEX — upstream seed<br/>the loop, the dual graph, real tools"]
+  UP --> BA["BaaRai/ARTEX (21k stars) — bet: trustworthy & resilient<br/>3 evidence gates, failover, budgets, injection boundary, browser auth capture, 12 skills"]
+  UP --> YM["panda0x123/artex-ymh — bet: reach & stealth<br/>internal-network movement, external to internal handoff, honeypot evasion, disguise gate, SHA-pinned arsenal"]
+```
+
 ## 1. The orchestration loop (planner ⇄ workers)
 
 All three run the same blackboard loop: a planner dispatches intents, workers claim and execute them,

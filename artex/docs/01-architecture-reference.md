@@ -137,20 +137,17 @@ Three clean exits: (1) `prove_goal` marks the last goal → task `done`, in-flig
 `AbortGoalMet`; (2) goalless drain → `done` with no LLM call; (3) task deadline → a final "settlement" wrap-up
 round runs and stops. Per-run budgets trigger an SDK-owned graceful wrap-up turn rather than a hard kill.
 
-```
-        ┌──────────── edge wake (graph changed)  ─────────────┐
-        │                  + 800ms debounce                   │
-        ▼                                                      │
-   ┌─────────┐   add_intent (≤4)    ┌──────────────────┐       │
-   │ PLANNER │ ───────────────────▶ │ exploration graph│       │
-   │ (1/task)│ ◀─────────────────── │   (blackboard)   │       │
-   └─────────┘   prove_goal / done  └──────────────────┘       │
-                                       ▲        │ frontier       │
-                      write facts/     │        ▼ (open intents) │
-                      assets/findings  │   ┌──────────┐          │
-                                       └── │ WORKERS  │ ── CAS claim
-                                           │  (N/task)│   run real tools
-                                           └──────────┘   NotifyDone ──┘
+```mermaid
+flowchart LR
+  G[("exploration graph (blackboard)")]
+  P["PLANNER (1 per task)"]
+  F["frontier: intents, state=open"]
+  W["WORKERS (N per task)"]
+  G -->|"edge wake: graph changed + 800ms debounce"| P
+  P -->|"add_intent (<= 4)"| F
+  F -->|"atomic CAS claim"| W
+  W -->|"run real tools; prove_goal / done"| G
+  W -->|"write facts / assets / findings; NotifyDone -> wake"| G
 ```
 
 ---
@@ -163,6 +160,23 @@ round runs and stops. Per-run budgets trigger an SDK-owned graceful wrap-up turn
 This is the single most important design decision. Instead of cramming everything into one giant prompt,
 knowledge is split into **two PostgreSQL-backed graphs**, and the *program* — not the model — computes
 structure, so the map stays consistent no matter how many agents touch it.
+
+```mermaid
+flowchart TB
+  subgraph ASSET["Asset graph — GLOBAL, shared across tasks"]
+    RD["root_domain"] --> SD["subdomain"] --> SVC["service"] --> EP["endpoint"]
+    RD --> IP["ip"]
+  end
+  subgraph EXPL["Exploration graph — PER TASK"]
+    GOAL["goal"] -->|spawns| INT["intent"]
+    INT -->|yields| FACT["fact"]
+    INT -->|yields| FIND["finding"]
+    FIND -->|proves| GOAL
+    DIG["digest"] -->|covers| FACT
+  end
+  INT -. anchor .- SVC
+  FIND -. anchor .- EP
+```
 
 ### 3.1 Graph A — the asset graph (global, shared across tasks)
 

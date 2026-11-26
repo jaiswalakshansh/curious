@@ -10,6 +10,33 @@ stage cites the real code.
 > tools through the capture proxy → writes assets/facts/findings back to the graph → that wakes the
 > planner → repeat until a finding *proves* the goal (and the server agrees) → reporter writes it up.**
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Op as Operator
+    participant Goals as Goals agent
+    participant Plan as Planner
+    participant Graph as Graph
+    participant Work as Worker
+    participant Proxy as Capture proxy
+    participant Srv as Server (verifier)
+    participant Rep as Reporter
+    Op->>Goals: objective + scope
+    Goals->>Graph: set_goals, set_constraints, minimal scope
+    Graph-->>Plan: wake (debounced 800ms)
+    Plan->>Graph: add_intent (<=4, target-anchored)
+    Work->>Graph: claim ONE intent (atomic CAS)
+    Work->>Proxy: run real tools (nmap, httpx, sqlmap, curl)
+    Proxy-->>Work: responses captured as evidence
+    Work->>Graph: insert_assets, record_fact, report_finding
+    Work-->>Plan: NotifyDone(intent) wakes planner
+    Plan->>Srv: prove_goal(finding)
+    Note over Srv: Gate1 host-matched capture, Gate2 L3+ verbatim quote, Gate3 provenance
+    Srv-->>Graph: goal MET only if all gates pass
+    Graph->>Rep: write report (every line traceable)
+    Rep-->>Op: Markdown finding report
+```
+
 Now the long version.
 
 ---
@@ -118,23 +145,30 @@ Then `t.NotifyDone(intentID)` **wakes the planner** with the finished intent's i
 The planner re-reads the graph — now richer by whatever the worker wrote — and plans again, reacting to
 what was just found. A credential the worker dumped reshapes the next intents. *This is the heartbeat.*
 
-```
- you ──objective──▶ [goals agent] ──goals+scope──▶ exploration graph
-                                                      │ (wake)
-                                                      ▼
-                            ┌────────── [PLANNER] add_intent ≤4 ──────────┐
-                            │                                             │
-   NotifyDone(intent) ◀─────┤                                             ▼
-        (wake)              │                                    intent(open)
-                            │                                             │ CAS claim
-                            │                                             ▼
-                            └──── write assets/facts/findings ◀── [WORKER] runs tools
-                                        back to graph               curl/nmap/sqlmap
-                                                                    └▶ :8788 capture proxy
-                                                                         └▶ immutable evidence
+```mermaid
+flowchart TB
+  OBJ(["you: objective"]) --> GA["goals agent"]
+  GA -->|"goals + scope"| GRAPH[("exploration graph")]
+  GRAPH -->|"wake"| PLAN["PLANNER — add_intent (<= 4)"]
+  PLAN --> INT["intent (open)"]
+  INT -->|"atomic CAS claim"| WORK["WORKER — runs tools (curl / nmap / sqlmap)"]
+  WORK -->|"HTTP via"| PROXY[":8788 capture proxy -> immutable evidence"]
+  WORK -->|"write assets / facts / findings"| GRAPH
+  WORK -->|"NotifyDone(intent) -> wake"| PLAN
 ```
 
 ## Stage 7 — proving the goal (the part that makes it honest)
+
+```mermaid
+flowchart TB
+  START["Planner calls prove_goal(finding)"] --> G1{"Gate 1: bound traffic still in live capture AND host in-scope?"}
+  G1 -->|no| REF["REFUSED — goal stays open"]
+  G1 -->|yes| G2{"Gate 2: POE >= L3 AND evidence quote appears verbatim in the decoded response body?"}
+  G2 -->|no| REF
+  G2 -->|yes| G3{"Gate 3: were the bytes merely echoed back by the target?"}
+  G3 -->|"yes -> demote to target_response"| REF
+  G3 -->|no| MET["goal MET (last goal -> task auto-completes)"]
+```
 
 Eventually a worker files a `report_finding` strong enough that the planner tries to close a goal with
 **`prove_goal`**. This is where ARTEX refuses to take the model's word. BaaRai runs **three independent

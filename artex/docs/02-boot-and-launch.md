@@ -77,17 +77,18 @@ updates. A `server.Manager` owns the lifecycle of tasks, engines, and stores. Th
 and the JSON API. The banner prints version, `GOOS/GOARCH`, Go version, and the listen address, and the
 process blocks on `signal.Notify` for a clean shutdown.
 
-```
-./artex
-  │
-  ├─ parse flags ( :8787 , data/ , 127.0.0.1:8788 )
-  ├─ load config / ARTEX_PG_DSN ───────────────▶ PostgreSQL
-  ├─ apply schema.sql + migrations (idempotent)
-  ├─ start recording MITM proxy ──────────────▶ :8788  (evidence bus)
-  ├─ start HTTP server (JWT + SSE) ───────────▶ :8787  (console + API)
-  │     └─ serve embedded Next.js / shadcn UI
-  └─ block on SIGINT/SIGTERM → graceful stop
-        (exit code tells the supervisor whether to relaunch)
+```mermaid
+flowchart TB
+  START(["./artex"]) --> FLAGS["parse flags: -addr :8787, -data data/, -proxy :8788"]
+  FLAGS --> CFG["load config / ARTEX_PG_DSN"]
+  CFG --> PG[("PostgreSQL")]
+  CFG --> SCHEMA["apply schema.sql + migrations (idempotent, every boot)"]
+  SCHEMA --> PG
+  SCHEMA --> PROXY["start recording MITM proxy :8788 — evidence bus, before any agent"]
+  PROXY --> SRV["start HTTP server :8787 (JWT + SSE)"]
+  SRV --> UI["serve embedded Next.js / shadcn UI"]
+  UI --> IDLE["DORMANT: live capture bus, empty graph — attacks nothing until a task is created"]
+  SRV -. "exit code tells the supervisor whether to relaunch (survives self-update)" .-> START
 ```
 
 ## Step 6 — nothing is attacking yet

@@ -22,11 +22,11 @@ fills, the harness **summarizes** older turns to make room. Tools usually run be
 prompt**. It can often spawn **subagents**, but their job is to do a bounded sub-task and hand a summary
 *back into the parent's one context*.
 
-```
-        ┌───────────────── one context window ─────────────────┐
-  user ▶│ reason → tool → observe → reason → tool → observe → … │▶ answer
-        └──────────────────────────────────────────────────────┘
-              memory = this window (summarized when full)
+```mermaid
+flowchart LR
+  U(["user: goal"]) --> L["one agent · one context window<br/>reason -> tool -> observe -> ..."]
+  L --> A(["answer"])
+  L -. "memory = this window (summarized when full, lossy)" .- L
 ```
 
 ### ARTEX's engine (blackboard multi-agent)
@@ -38,13 +38,17 @@ Four jobs, four owners, state in a database:
 - **The graph (PostgreSQL)** — the durable, shared memory.
 - **The server** — *verifies* findings; the LLM never gets to declare victory.
 
-```
-        ┌──────────── exploration graph (PostgreSQL) ───────────┐
-        │   goals · intents · facts · findings · assets         │
-        └───▲───────────────▲───────────────▲──────────────▲────┘
-            │ plan          │ claim         │ write-back    │ verify
-       [PLANNER]      [WORKER 1]  [WORKER 2]  [WORKER 3]  [SERVER]
-       (strategy)    (each: one intent, real tools, then stop)  (proof gates)
+```mermaid
+flowchart TB
+  GRAPH[("exploration graph — PostgreSQL<br/>goals · intents · facts · findings · assets")]
+  PLAN["PLANNER<br/>strategy"] -->|plan| GRAPH
+  GRAPH -->|claim| W1["WORKER 1"]
+  GRAPH -->|claim| W2["WORKER 2"]
+  GRAPH -->|claim| W3["WORKER 3"]
+  W1 -->|write-back| GRAPH
+  W2 -->|write-back| GRAPH
+  W3 -->|write-back| GRAPH
+  SRV["SERVER<br/>proof gates"] -->|verify| GRAPH
 ```
 
 The harness keeps everything in one head. ARTEX splits the one head into a committee with a shared
